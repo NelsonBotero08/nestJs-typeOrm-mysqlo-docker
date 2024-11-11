@@ -1,20 +1,40 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateCatDto } from './dto/create-cat.dto';
 import { UpdateCatDto } from './dto/update-cat.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cat } from './entities/cat.entity';
 import { Repository } from 'typeorm';
+import { Breed } from 'src/breeds/entities/breed.entity';
 
 @Injectable()
 export class CatsService {
   constructor(
     @InjectRepository(Cat)
     private readonly catRepository: Repository<Cat>,
+
+    @InjectRepository(Breed)
+    private breedsRepository: Repository<Breed>,
   ) {}
 
   async create(createCatDto: CreateCatDto) {
     try {
-      const cat = this.catRepository.create(createCatDto);
+      const breed = await this.breedsRepository.findOneBy({
+        name: createCatDto.breed,
+      });
+
+      if (!breed) {
+        throw new BadRequestException('Breed not found');
+      }
+
+      const cat = this.catRepository.create({
+        name: createCatDto.name,
+        age: createCatDto.age,
+        breed,
+      });
       return await this.catRepository.save(cat);
     } catch (error) {
       throw new Error('Error creating cat: ' + error.message);
@@ -46,15 +66,28 @@ export class CatsService {
   }
 
   async update(id: number, updateCatDto: UpdateCatDto) {
-    try {
-      const updateCat = await this.catRepository.update(id, updateCatDto);
+    const cat = await this.catRepository.findOneBy({ id });
 
-      if (updateCat.affected === 0) {
-        throw new Error(`el gato con el id ${id} no fue actualizado`);
+    if (!cat) {
+      throw new BadRequestException('Cat not found');
+    }
+
+    let breed;
+    if (updateCatDto.breed) {
+      breed = await this.breedsRepository.findOneBy({
+        name: updateCatDto.breed,
+      });
+
+      if (!breed) {
+        throw new BadRequestException('Breed not found');
       }
+    }
 
-      return `El gato con ID ${id} fue actualizado con exito`;
-    } catch (error) {}
+    return await this.catRepository.save({
+      ...cat,
+      ...updateCatDto,
+      breed,
+    });
   }
 
   async remove(id: number) {
