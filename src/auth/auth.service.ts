@@ -9,7 +9,6 @@ import { RegisterDto } from './dto/register.dto';
 import * as bcryptjs from 'bcryptjs';
 import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
-import { AuthGuard } from './guards/auth.guard';
 
 @Injectable()
 export class AuthService {
@@ -25,11 +24,16 @@ export class AuthService {
       throw new BadRequestException('usuario ya existe en la base de datos');
     }
 
-    return await this.usersService.create({
+    await this.usersService.create({
       name: registerDto.name,
       email: registerDto.email,
       password: await bcryptjs.hash(registerDto.password, 10),
     });
+
+    return {
+      name: registerDto.name,
+      email: registerDto.email,
+    };
   }
 
   async login(loginDto: LoginDto) {
@@ -45,13 +49,24 @@ export class AuthService {
       throw new UnauthorizedException('password Invalid');
     }
 
-    const payload = { email: user.email };
+    const payload = { email: user.email, role: user.role };
 
     const token = await this.jwtService.signAsync(payload);
 
     return {
       user,
       token,
+    };
+  }
+
+  async profile({ email }: { email: string }) {
+    const user = await this.usersService.findOneByEmail(email);
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      deletedAt: user.deletedAt,
     };
   }
 }
